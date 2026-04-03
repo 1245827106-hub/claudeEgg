@@ -161,7 +161,7 @@ class WalkerCharacter {
     this.walkStartTime = Date.now();
     if (this.positionProgress > 0.85) this.goingRight = false;
     else if (this.positionProgress < 0.15) this.goingRight = true;
-    else this.goingRight = Math.random() > 0.5;
+    else this.goingRight = Math.random() > 0.3 ? this.goingRight : !this.goingRight;
 
     this.walkStartPos = this.positionProgress;
     const [minAmt, maxAmt] = this.config.walkAmountRange;
@@ -181,6 +181,13 @@ class WalkerCharacter {
         this.walkEndPos = this.goingRight
           ? Math.max(this.walkStartPos, sibPos - 0.12)
           : Math.min(this.walkStartPos, sibPos + 0.12);
+        // If collision avoidance leaves almost no distance, flip and walk the other way
+        if (Math.abs(this.walkEndPos - this.walkStartPos) < 0.02) {
+          this.goingRight = !this.goingRight;
+          this.walkEndPos = this.goingRight
+            ? Math.min(this.walkStartPos + walkAmount, 1.0)
+            : Math.max(this.walkStartPos - walkAmount, 0.0);
+        }
         this.walkEndPixel = this.walkEndPos * this.currentTravelDistance;
       }
     }

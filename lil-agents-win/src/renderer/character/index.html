@@ -26,10 +26,8 @@
       height: 100%;
       object-fit: contain;
       background: transparent;
-      transition: transform 0.05s linear;
-    }
-    #charVideo.flipped {
-      transform: scaleX(-1);
+      transform-origin: center center;
+      will-change: transform;
     }
   </style>
 </head>
@@ -49,13 +47,7 @@
     });
 
     function applyState(data) {
-      // Flip direction
-      if (data.goingRight) {
-        video.classList.remove('flipped');
-      } else {
-        video.classList.add('flipped');
-      }
-      // Walk / idle
+      video.style.transform = data.goingRight ? 'scaleX(1)' : 'scaleX(-1)';
       if (data.walking) {
         video.currentTime = 0;
         video.play().catch(() => {});
