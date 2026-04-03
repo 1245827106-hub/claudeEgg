@@ -17,6 +17,8 @@ const BRUCE_CONFIG = {
   accelStart: 3.0, fullSpeedStart: 3.75, decelStart: 8.0, walkStop: 8.5,
   walkAmountRange: [0.4, 0.65],
   videoDuration: 10.0,
+  yOffset: 0,
+  flipXOffset: 0,
 };
 
 const JAZZ_CONFIG = {
@@ -26,6 +28,8 @@ const JAZZ_CONFIG = {
   accelStart: 3.9, fullSpeedStart: 4.5, decelStart: 8.0, walkStop: 8.75,
   walkAmountRange: [0.35, 0.60],
   videoDuration: 10.0,
+  yOffset: 2,
+  flipXOffset: -9,
 };
 
 const THINKING_PHRASES = [
@@ -232,8 +236,9 @@ class WalkerCharacter {
 
   _updatePosition(area) {
     if (!this.window || this.window.isDestroyed()) return;
-    const x = Math.round(area.walkXStart + this.currentTravelDistance * this.positionProgress);
-    const y = area.walkY - CHAR_HEIGHT + BOTTOM_PADDING;
+    const flipCompensation = this.goingRight ? 0 : (this.config.flipXOffset || 0);
+    const x = Math.round(area.walkXStart + this.currentTravelDistance * this.positionProgress + flipCompensation);
+    const y = area.walkY - CHAR_HEIGHT + BOTTOM_PADDING + (this.config.yOffset || 0);
     const bounds = this.window.getBounds();
     if (bounds.x !== x || bounds.y !== y)
       this.window.setBounds({ x, y, width: CHAR_WIDTH, height: CHAR_HEIGHT });
@@ -677,7 +682,17 @@ class CharacterManager {
 
   _startAnimationLoop() {
     this.animationTimer = setInterval(() => {
-      for (const char of Object.values(this.characters)) char.update();
+      const chars = Object.values(this.characters);
+      // One-at-a-time walking: if any character is walking, delay others
+      const anyWalking = chars.some(c => c.isWalking && !c.isIdleForPopover);
+      if (anyWalking) {
+        for (const char of chars) {
+          if (!char.isIdleForPopover && char.isPaused && Date.now() >= char.pauseEndTime) {
+            char.pauseEndTime = Date.now() + randomInRange(5000, 10000);
+          }
+        }
+      }
+      for (const char of chars) char.update();
     }, 33);
   }
 
