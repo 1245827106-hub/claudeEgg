@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      -webkit-app-region: no-drag;
+      user-select: none;
+    }
+    .character-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      cursor: pointer;
+    }
+    #charVideo {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: transparent;
+      transition: transform 0.05s linear;
+    }
+    #charVideo.flipped {
+      transform: scaleX(-1);
+    }
+  </style>
+</head>
+<body>
+  <div class="character-container" id="container">
+    <video id="charVideo" muted playsinline preload="auto"></video>
+  </div>
+  <script>
+    const container = document.getElementById('container');
+    const video = document.getElementById('charVideo');
+    let videoReady = false;
+    let pendingState = null;
+
+    // Handle click
+    container.addEventListener('click', () => {
+      window.lilAgents.characterClicked();
+    });
+
+    function applyState(data) {
+      // Flip direction
+      if (data.goingRight) {
+        video.classList.remove('flipped');
+      } else {
+        video.classList.add('flipped');
+      }
+      // Walk / idle
+      if (data.walking) {
+        video.currentTime = 0;
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+        video.currentTime = 0;
+      }
+    }
+
+    // Set video source based on character data
+    window.lilAgents.onPositionUpdate((data) => {
+      if (data.videoSrc && !video.src.endsWith(data.videoSrc.split('/').pop())) {
+        video.src = data.videoSrc;
+        video.load();
+      }
+    });
+
+    // Video ready
+    video.addEventListener('canplaythrough', () => {
+      videoReady = true;
+      video.currentTime = 0;
+      video.pause();
+      if (pendingState) {
+        applyState(pendingState);
+        pendingState = null;
+      }
+    }, { once: true });
+
+    // Handle flip & walk state
+    window.lilAgents.onFlip((data) => {
+      if (videoReady) {
+        applyState(data);
+      } else {
+        pendingState = data;
+      }
+    });
+
+    // When video ends, pause at frame 0 (main process controls walk lifecycle)
+    video.addEventListener('ended', () => {
+      video.currentTime = 0;
+      video.pause();
+    });
+  </script>
+</body>
+</html>

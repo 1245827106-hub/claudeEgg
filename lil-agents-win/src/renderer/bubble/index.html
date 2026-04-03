@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      user-select: none;
+    }
+    .bubble {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 120px;
+      height: 26px;
+      border-radius: 14px;
+      background: rgba(255, 243, 230, 0.95);
+      border: 1px solid rgba(242, 140, 166, 0.6);
+      font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(140, 128, 133, 1);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .bubble.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="bubble" id="bubble"></div>
+  <script>
+    const bubble = document.getElementById('bubble');
+
+    window.lilAgents.onBubbleUpdate((data) => {
+      bubble.textContent = data.text;
+      bubble.classList.add('visible');
+
+      // Apply theme colors & fonts
+      if (data.bubbleBg) bubble.style.background = data.bubbleBg;
+      if (data.bubbleRadius) bubble.style.borderRadius = data.bubbleRadius;
+      if (data.bubbleFontWeight) bubble.style.fontWeight = data.bubbleFontWeight;
+      if (data.bubbleFontSize) bubble.style.fontSize = data.bubbleFontSize;
+      if (data.bubbleFontFamily) bubble.style.fontFamily = data.bubbleFontFamily;
+
+      if (data.isCompletion) {
+        bubble.style.borderColor = data.bubbleCompletionBorder || 'rgba(77, 191, 128, 0.7)';
+        bubble.style.color = data.bubbleCompletionText || 'rgba(51, 153, 102, 1)';
+      } else {
+        bubble.style.borderColor = data.bubbleBorder || 'rgba(242, 140, 166, 0.6)';
+        bubble.style.color = data.bubbleText || 'rgba(140, 128, 133, 1)';
+      }
+    });
+
+    window.lilAgents.onBubbleHide(() => {
+      bubble.classList.remove('visible');
+    });
+  </script>
+</body>
+</html>

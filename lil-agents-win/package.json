@@ -1,0 +1,14 @@
+{
+  "name": "lil-agents-win",
+  "version": "1.0.0",
+  "description": "Tiny AI companions that live above your Windows taskbar",
+  "main": "main.js",
+  "scripts": {
+    "start": "node start.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0"
+  }
+}
