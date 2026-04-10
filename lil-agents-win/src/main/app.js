@@ -102,6 +102,10 @@ class AppManager {
           CharacterManager.setSoundsEnabled(menuItem.checked);
         }
       },
+      {
+        label: `Voice Input (${this._getASRStatusLabel()})`,
+        enabled: false,
+      },
       { type: 'separator' },
       {
         label: 'Quit',
@@ -125,6 +129,15 @@ class AppManager {
     return nativeImage.createFromDataURL(
       `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
     );
+  }
+
+  _getASRStatusLabel() {
+    if (!this.characterManager || !this.characterManager.asrService) return 'N/A';
+    const status = this.characterManager.asrService.getStatus();
+    if (status === 'ready') return 'Ready';
+    if (status === 'loading') return 'Loading...';
+    if (status === 'error') return 'Error';
+    return 'Stopped';
   }
 
   cleanup() {

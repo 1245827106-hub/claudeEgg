@@ -187,6 +187,17 @@ html, body {
   padding: 6px 10px 8px;
 }
 
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.input-row .input-field {
+  flex: 1;
+  min-width: 0;
+}
+
 .input-field {
   width: 100%;
   height: 30px;
@@ -202,4 +213,41 @@ html, body {
 
 .input-field::placeholder {
   color: var(--text-dim);
+}
+
+/* Microphone button */
+.mic-btn {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  background: var(--input-bg);
+  border: none;
+  border-radius: var(--input-radius);
+  cursor: pointer;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+  padding: 0;
+}
+
+.mic-btn:hover {
+  color: var(--accent);
+}
+
+.mic-btn.recording {
+  color: var(--error);
+  animation: mic-pulse 1s ease-in-out infinite;
+}
+
+.mic-btn.transcribing {
+  color: var(--text-dim);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }

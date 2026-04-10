@@ -1,9 +1,10 @@
-const { BrowserWindow, screen, ipcMain } = require('electron');
+const { BrowserWindow, screen, ipcMain, session } = require('electron');
 const path = require('path');
 const { getCharacterWalkArea } = require('./taskbar');
 const { ClaudeSession } = require('./claude-session');
 const { getCharacterTheme, formatTitle } = require('./themes');
 const Store = require('./store');
+const { ASRService } = require('./asr-service');
 
 const CHAR_WIDTH = 113;
 const CHAR_HEIGHT = 200;
@@ -430,19 +431,22 @@ click anywhere outside to dismiss, then click us again to start chatting.`;
 
     if (!this.chatWindow || this.chatWindow.isDestroyed()) this._createChatWindow();
 
-    // Send theme & replay history after load
+    // Send theme & replay history — always reload page to ensure render frame is alive
     const sendThemeAndHistory = () => {
-      const theme = getCharacterTheme(this.config.id);
-      this.chatWindow.webContents.send('theme:update', { theme, title: formatTitle(theme) });
-      if (this.session.history.length > 0)
-        this.chatWindow.webContents.send('chat:replay-history', this.session.history);
+      try {
+        if (!this.chatWindow || this.chatWindow.isDestroyed()) return;
+        const theme = getCharacterTheme(this.config.id);
+        this.chatWindow.webContents.send('theme:update', { theme, title: formatTitle(theme) });
+        if (this.session && this.session.history.length > 0)
+          this.chatWindow.webContents.send('chat:replay-history', this.session.history);
+      } catch (e) {
+        // Render frame was disposed; will be resent on next reload via did-finish-load
+      }
     };
 
-    if (this.chatWindow.webContents.isLoading()) {
-      this.chatWindow.webContents.once('did-finish-load', sendThemeAndHistory);
-    } else {
-      sendThemeAndHistory();
-    }
+    // Always reload to guarantee a live render frame (hidden windows dispose their frame)
+    this.chatWindow.webContents.once('did-finish-load', sendThemeAndHistory);
+    this.chatWindow.webContents.reload();
 
     // Reposition chat window to current character location BEFORE showing
     const area = getCharacterWalkArea();
@@ -530,14 +534,8 @@ click anywhere outside to dismiss, then click us again to start chatting.`;
     });
 
     // Close popover when clicking outside
-    this.chatWindow.on('blur', () => {
-      this._blurTimer = setTimeout(() => {
-        // Skip if we just opened, or window regained focus, or character was clicked
-        if (this._ignoreBlurUntil && Date.now() < this._ignoreBlurUntil) return;
-        if (this.chatWindow && !this.chatWindow.isDestroyed() && !this.chatWindow.isFocused())
-          this.closePopover();
-      }, 300);
-    });
+    // Chat window stays visible — no blur-close
+    this.chatWindow.on('blur', () => {});
   }
 
   applyTheme() {
@@ -601,10 +599,16 @@ class CharacterManager {
     this.characters = {};
     this.animationTimer = null;
     this.onboardingComplete = Store.get('onboardingComplete', false);
+    this.asrService = new ASRService();
   }
 
   init() {
     soundsEnabled = Store.get('soundsEnabled', true);
+
+    // Grant microphone permission for voice input
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+      callback(permission === 'media');
+    });
 
     this.characters.bruce = new WalkerCharacter(BRUCE_CONFIG, this);
     this.characters.jazz = new WalkerCharacter(JAZZ_CONFIG, this);
@@ -612,6 +616,11 @@ class CharacterManager {
     this.characters.jazz.createWindow();
     this._setupIPC();
     this._startAnimationLoop();
+
+    // Auto-start ASR service
+    this.asrService.start().catch(err => {
+      console.error('[ASR] Auto-start failed:', err.message);
+    });
 
     // First-run onboarding
     if (!this.onboardingComplete) {
@@ -678,6 +687,28 @@ class CharacterManager {
         }
       }
     });
+
+    // Voice input state: suppress blur while recording/transcribing
+    ipcMain.on('voice:active', (event, active) => {
+      for (const char of Object.values(this.characters)) {
+        if (char.chatWindow && !char.chatWindow.isDestroyed() && char.chatWindow.webContents === event.sender) {
+          char._voiceInputActive = active;
+          return;
+        }
+      }
+    });
+
+    // ASR IPC handlers
+    ipcMain.handle('asr:transcribe', async (event, audioData) => {
+      try {
+        return await this.asrService.transcribe(Buffer.from(audioData));
+      } catch (err) {
+        return { error: err.message };
+      }
+    });
+    ipcMain.handle('asr:status', async () => {
+      return { status: this.asrService.getStatus(), ready: this.asrService.isReady() };
+    });
   }
 
   _startAnimationLoop() {
@@ -699,6 +730,7 @@ class CharacterManager {
   cleanup() {
     if (this.animationTimer) clearInterval(this.animationTimer);
     for (const char of Object.values(this.characters)) char.cleanup();
+    this.asrService.stop();
   }
 }
 

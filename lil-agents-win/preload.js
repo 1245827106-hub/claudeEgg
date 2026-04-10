@@ -28,4 +28,9 @@ contextBridge.exposeInMainWorld('lilAgents', {
 
   // Theme APIs
   onThemeUpdate: (cb) => ipcRenderer.on('theme:update', (_, data) => cb(data)),
+
+  // ASR APIs
+  transcribeAudio: (audioArrayBuffer) => ipcRenderer.invoke('asr:transcribe', audioArrayBuffer),
+  getASRStatus: () => ipcRenderer.invoke('asr:status'),
+  setVoiceActive: (active) => ipcRenderer.send('voice:active', active),
 });

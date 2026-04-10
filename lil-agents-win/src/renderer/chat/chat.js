@@ -59,6 +59,8 @@ function handleSlashCommand(text) {
         <div style="font-weight:600;color:var(--accent)">lil agents — slash commands</div>
         <div><strong>/clear</strong> <span style="color:var(--text-dim)">clear chat history</span></div>
         <div><strong>/copy</strong> <span style="color:var(--text-dim)">copy last response</span></div>
+        <div><strong>/voice</strong> <span style="color:var(--text-dim)">toggle voice recording</span></div>
+        <div><strong>/asr status</strong> <span style="color:var(--text-dim)">check ASR service status</span></div>
         <div><strong>/help</strong> <span style="color:var(--text-dim)">show this message</span></div>
       `;
       messages.appendChild(help);
@@ -66,7 +68,16 @@ function handleSlashCommand(text) {
       return true;
     }
 
+    case '/voice':
+      if (window._voiceInput) window._voiceInput.toggle();
+      return true;
+
     default: {
+      // Handle /asr subcommands
+      if (cmd.startsWith('/asr')) {
+        handleASRCommand(text);
+        return true;
+      }
       const err = document.createElement('div');
       err.className = 'msg msg-error';
       err.textContent = `unknown command: ${text} (try /help)`;
@@ -276,4 +287,43 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.appendChild(document.createTextNode(text));
   return div.innerHTML;
+}
+
+// ---- ASR commands ----
+
+async function handleASRCommand(text) {
+  const parts = text.split(/\s+/);
+  const sub = (parts[1] || '').toLowerCase();
+
+  if (sub === 'status') {
+    try {
+      const status = await window.lilAgents.getASRStatus();
+      const statusText = status.ready ? 'ready' : status.status;
+      const div = document.createElement('div');
+      div.className = 'msg msg-system';
+      div.innerHTML = `<span style="color:var(--accent)">ASR:</span> ${escapeHtml(statusText)}`;
+      messages.appendChild(div);
+    } catch (e) {
+      appendError('ASR service not available');
+    }
+  } else {
+    const div = document.createElement('div');
+    div.className = 'msg msg-system';
+    div.innerHTML = `
+      <div style="font-weight:600;color:var(--accent)">ASR commands</div>
+      <div><strong>/asr status</strong> <span style="color:var(--text-dim)">check ASR service status</span></div>
+      <div><strong>/voice</strong> <span style="color:var(--text-dim)">toggle voice recording</span></div>
+    `;
+    messages.appendChild(div);
+  }
+  scrollToBottom();
+}
+
+// ---- Voice input initialization ----
+
+const micBtn = document.getElementById('micBtn');
+if (micBtn) {
+  window._voiceInput = new VoiceInput(micBtn, inputField, (errMsg) => {
+    appendError(errMsg);
+  });
 }
