@@ -619,6 +619,16 @@ class CharacterManager {
     this.characters.jazz = new WalkerCharacter(JAZZ_CONFIG, this);
     this.characters.bruce.createWindow();
     this.characters.jazz.createWindow();
+
+    // Restore visibility state from store
+    if (!Store.get('bruceVisible', true)) {
+      const bruce = this.characters.bruce;
+      if (bruce.window && !bruce.window.isDestroyed()) bruce.window.hide();
+    }
+    if (!Store.get('jazzVisible', true)) {
+      const jazz = this.characters.jazz;
+      if (jazz.window && !jazz.window.isDestroyed()) jazz.window.hide();
+    }
     this._setupIPC();
     this._startAnimationLoop();
 

@@ -2,6 +2,7 @@ const { app, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const { CharacterManager } = require('./character-manager');
 const { ALL_THEME_NAMES, getCharacterTheme, setCharacterTheme } = require('./themes');
+const Store = require('./store');
 
 class AppManager {
   constructor() {
@@ -48,9 +49,10 @@ class AppManager {
           {
             label: 'Show',
             type: 'checkbox',
-            checked: true,
+            checked: Store.get('bruceVisible', true),
             click: (menuItem) => {
               const bruce = this.characterManager.characters.bruce;
+              Store.set('bruceVisible', menuItem.checked);
               if (menuItem.checked) {
                 if (bruce.window && !bruce.window.isDestroyed()) bruce.window.show();
               } else {
@@ -74,9 +76,10 @@ class AppManager {
           {
             label: 'Show',
             type: 'checkbox',
-            checked: true,
+            checked: Store.get('jazzVisible', true),
             click: (menuItem) => {
               const jazz = this.characterManager.characters.jazz;
+              Store.set('jazzVisible', menuItem.checked);
               if (menuItem.checked) {
                 if (jazz.window && !jazz.window.isDestroyed()) jazz.window.show();
               } else {
