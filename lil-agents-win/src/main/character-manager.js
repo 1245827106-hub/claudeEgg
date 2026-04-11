@@ -341,8 +341,23 @@ class WalkerCharacter {
       : this._getSoundWindow();
 
     if (targetWindow && !targetWindow.isDestroyed()) {
+      // Use Web Audio API instead of HTMLAudioElement to avoid Windows media OSD
       targetWindow.webContents.executeJavaScript(
-        `(function(){ var a = new Audio('${fileUrl}'); a.volume = 0.6; a.play().catch(function(){}); })()`
+        `(function(){
+          fetch('${fileUrl}').then(function(r){return r.arrayBuffer()}).then(function(buf){
+            var ctx = new (window.AudioContext||window.webkitAudioContext)();
+            return ctx.decodeAudioData(buf).then(function(decoded){
+              var src = ctx.createBufferSource();
+              var gain = ctx.createGain();
+              gain.gain.value = 0.6;
+              src.buffer = decoded;
+              src.connect(gain);
+              gain.connect(ctx.destination);
+              src.onended = function(){ ctx.close(); };
+              src.start(0);
+            });
+          }).catch(function(){});
+        })()`
       ).catch(() => {});
     }
   }
