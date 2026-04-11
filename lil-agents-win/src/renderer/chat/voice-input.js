@@ -13,6 +13,7 @@ class VoiceInput {
     this.audioChunks = [];
     this.stream = null;
     this.maxDurationTimer = null;
+    this.recordingStartTime = 0;
     this.micBtn.addEventListener('click', () => this.toggle());
   }
 
@@ -46,6 +47,7 @@ class VoiceInput {
       this.mediaRecorder.onerror = (e) => { this.onError('Recording error: ' + (e.error?.message || 'unknown')); this.setState('idle'); };
 
       this.mediaRecorder.start(500);
+      this.recordingStartTime = Date.now();
       this.setState('recording');
       this.maxDurationTimer = setTimeout(() => { if (this.state === 'recording') this.stopRecording(); }, 60000);
     } catch (err) {
@@ -58,6 +60,18 @@ class VoiceInput {
 
   stopRecording() {
     if (this.maxDurationTimer) { clearTimeout(this.maxDurationTimer); this.maxDurationTimer = null; }
+
+    // Ensure minimum 800ms recording so at least one data chunk is captured
+    const elapsed = Date.now() - this.recordingStartTime;
+    const minDuration = 800;
+    if (elapsed < minDuration) {
+      setTimeout(() => this._doStop(), minDuration - elapsed);
+    } else {
+      this._doStop();
+    }
+  }
+
+  _doStop() {
     if (this.mediaRecorder?.state === 'recording') this.mediaRecorder.stop();
     if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; }
   }
