@@ -32,7 +32,7 @@ import json
 import edge_tts
 
 PORT = int(os.environ.get("TTS_PORT", "18921"))
-VOICE_ZH = os.environ.get("TTS_VOICE_ZH", "zh-CN-XiaoyiNeural")
+VOICE_ZH = os.environ.get("TTS_VOICE_ZH", "zh-CN-XiaoxiaoNeural")
 VOICE_EN = os.environ.get("TTS_VOICE_EN", "en-US-AnaNeural")
 VOICE_JA = os.environ.get("TTS_VOICE_JA", "ja-JP-NanamiNeural")
 MAX_TEXT_LENGTH = int(os.environ.get("TTS_MAX_TEXT_LENGTH", "500"))
