@@ -1,8 +1,8 @@
 /**
  * TTS Service Manager
- * Manages the Python Qwen3-TTS HTTP service lifecycle.
+ * Manages the Python edge-tts HTTP service lifecycle.
  * Thin relay — all smart logic (language detection, text truncation,
- * markdown stripping, default voice instruct) lives in tts_server.py.
+ * markdown stripping, voice selection) lives in tts_server.py.
  */
 
 const { spawn } = require('child_process');
@@ -158,7 +158,7 @@ class TTSService {
           const buf = Buffer.concat(chunks);
           if (res.statusCode === 200) {
             const base64 = buf.toString('base64');
-            resolve({ audioDataUrl: `data:audio/wav;base64,${base64}` });
+            resolve({ audioDataUrl: `data:audio/mpeg;base64,${base64}` });
           } else {
             try {
               const err = JSON.parse(buf.toString());
@@ -242,7 +242,7 @@ class TTSService {
           pendingBuf = pendingBuf.slice(4 + wavLen);
 
           const base64 = wavBuf.toString('base64');
-          onChunk({ audioDataUrl: `data:audio/wav;base64,${base64}` });
+          onChunk({ audioDataUrl: `data:audio/mpeg;base64,${base64}` });
         }
       });
 
