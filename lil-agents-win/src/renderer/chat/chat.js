@@ -358,13 +358,6 @@ async function handleTTSCommand(text) {
   scrollToBottom();
 }
 
-// ---- Suppress Windows media overlay (OSD) ----
-if (navigator.mediaSession) {
-  navigator.mediaSession.metadata = null;
-  ['play','pause','stop','seekbackward','seekforward','previoustrack','nexttrack']
-    .forEach(a => { try { navigator.mediaSession.setActionHandler(a, null); } catch {} });
-}
-
 // ---- Voice input initialization ----
 
 // Pre-warm microphone: force Bluetooth SCO channel init before user clicks

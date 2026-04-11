@@ -341,23 +341,8 @@ class WalkerCharacter {
       : this._getSoundWindow();
 
     if (targetWindow && !targetWindow.isDestroyed()) {
-      // Use Web Audio API instead of HTMLAudioElement to avoid Windows media OSD
       targetWindow.webContents.executeJavaScript(
-        `(function(){
-          fetch('${fileUrl}').then(function(r){return r.arrayBuffer()}).then(function(buf){
-            var ctx = new (window.AudioContext||window.webkitAudioContext)();
-            return ctx.decodeAudioData(buf).then(function(decoded){
-              var src = ctx.createBufferSource();
-              var gain = ctx.createGain();
-              gain.gain.value = 0.6;
-              src.buffer = decoded;
-              src.connect(gain);
-              gain.connect(ctx.destination);
-              src.onended = function(){ ctx.close(); };
-              src.start(0);
-            });
-          }).catch(function(){});
-        })()`
+        `(function(){ var a = new Audio('${fileUrl}'); a.volume = 0.6; a.play().catch(function(){}); })()`
       ).catch(() => {});
     }
   }
@@ -769,20 +754,26 @@ class CharacterManager {
         text,
         (chunk) => {
           // Send each sentence's audio to the renderer that requested it
-          if (!event.sender.isDestroyed()) {
-            event.sender.send('tts:stream-chunk', chunk);
-          }
+          try {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send('tts:stream-chunk', chunk);
+            }
+          } catch {}
         },
         () => {
-          if (!event.sender.isDestroyed()) {
-            event.sender.send('tts:stream-done');
-          }
+          try {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send('tts:stream-done');
+            }
+          } catch {}
           this._ttsCancel = null;
         },
         (err) => {
-          if (!event.sender.isDestroyed()) {
-            event.sender.send('tts:stream-error', err.message);
-          }
+          try {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send('tts:stream-error', err.message);
+            }
+          } catch {}
           this._ttsCancel = null;
         }
       );

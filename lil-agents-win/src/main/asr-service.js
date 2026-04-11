@@ -181,9 +181,10 @@ class ASRService {
         },
         timeout: 30000,
       }, (res) => {
-        let data = '';
-        res.on('data', (chunk) => { data += chunk; });
+        const chunks = [];
+        res.on('data', (chunk) => { chunks.push(chunk); });
         res.on('end', () => {
+          const data = Buffer.concat(chunks).toString('utf-8');
           try {
             const result = JSON.parse(data);
             if (res.statusCode === 200) {
@@ -231,10 +232,11 @@ class ASRService {
       }
 
       const req = http.get(`http://127.0.0.1:${port}/health`, { timeout: 3000 }, (res) => {
-        let data = '';
-        res.on('data', (chunk) => { data += chunk; });
+        const chunks = [];
+        res.on('data', (chunk) => { chunks.push(chunk); });
         res.on('end', () => {
           try {
+            const data = Buffer.concat(chunks).toString('utf-8');
             const result = JSON.parse(data);
             if (result.status === 'ready') {
               this.ready = true;

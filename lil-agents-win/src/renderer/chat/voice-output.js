@@ -13,18 +13,8 @@ class VoiceOutput {
   constructor() {
     this.state = 'idle'; // idle | playing
     this.queue = [];     // queued audio data URLs
-    this.currentAudio = null; // AudioBufferSourceNode
-    this._audioCtx = null;
+    this.currentAudio = null;
     this._setupListeners();
-  }
-
-  /** Lazy-init AudioContext (Web Audio API doesn't trigger Windows media OSD) */
-  _getAudioCtx() {
-    if (!this._audioCtx || this._audioCtx.state === 'closed') {
-      this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (this._audioCtx.state === 'suspended') this._audioCtx.resume();
-    return this._audioCtx;
   }
 
   _setupListeners() {
@@ -73,7 +63,8 @@ class VoiceOutput {
   stop() {
     window.lilAgents.ttsStreamStop();
     if (this.currentAudio) {
-      try { this.currentAudio.stop(); } catch {}
+      this.currentAudio.pause();
+      this.currentAudio.currentTime = 0;
       this.currentAudio = null;
     }
     this.queue = [];
@@ -81,10 +72,9 @@ class VoiceOutput {
   }
 
   /**
-   * Play next chunk from queue using Web Audio API
-   * (AudioContext does not trigger Windows media overlay).
+   * Play next chunk from queue.
    */
-  async _playNext() {
+  _playNext() {
     if (this.queue.length === 0) {
       this.state = 'idle';
       this.currentAudio = null;
@@ -93,29 +83,21 @@ class VoiceOutput {
 
     this.state = 'playing';
     const url = this.queue.shift();
+    this.currentAudio = new Audio(url);
 
-    try {
-      const ctx = this._getAudioCtx();
+    this.currentAudio.onended = () => {
+      this.currentAudio = null;
+      this._playNext(); // Play next sentence in queue
+    };
 
-      // Convert data-URL to ArrayBuffer
-      const resp = await fetch(url);
-      const arrayBuf = await resp.arrayBuffer();
-      const audioBuf = await ctx.decodeAudioData(arrayBuf);
-
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuf;
-      source.connect(ctx.destination);
-
-      source.onended = () => {
-        this.currentAudio = null;
-        this._playNext();
-      };
-
-      this.currentAudio = source;
-      source.start(0);
-    } catch {
+    this.currentAudio.onerror = () => {
       this.currentAudio = null;
       this._playNext(); // Skip failed chunk, try next
-    }
+    };
+
+    this.currentAudio.play().catch(() => {
+      this.currentAudio = null;
+      this._playNext();
+    });
   }
 }

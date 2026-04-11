@@ -1,5 +1,8 @@
 const { app, dialog } = require('electron');
 
+// Disable Windows media overlay (volume OSD) triggered by HTMLAudioElement.play()
+app.commandLine.appendSwitch('disable-features', 'HardwareMediaKeyHandling,MediaSessionService');
+
 // Catch errors early
 process.on('uncaughtException', (err) => {
   dialog.showErrorBox('lil agents error', err.stack || err.message);
