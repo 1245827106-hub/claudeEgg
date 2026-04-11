@@ -33,4 +33,14 @@ contextBridge.exposeInMainWorld('lilAgents', {
   transcribeAudio: (audioArrayBuffer) => ipcRenderer.invoke('asr:transcribe', audioArrayBuffer),
   getASRStatus: () => ipcRenderer.invoke('asr:status'),
   setVoiceActive: (active) => ipcRenderer.send('voice:active', active),
+
+  // TTS APIs
+  synthesizeText: (text) => ipcRenderer.invoke('tts:synthesize', text),
+  getTTSStatus: () => ipcRenderer.invoke('tts:status'),
+  // TTS streaming: sentence-by-sentence playback
+  ttsStreamStart: (text) => ipcRenderer.send('tts:stream-start', text),
+  ttsStreamStop: () => ipcRenderer.send('tts:stream-stop'),
+  onTTSChunk: (cb) => ipcRenderer.on('tts:stream-chunk', (_, data) => cb(data)),
+  onTTSDone: (cb) => ipcRenderer.on('tts:stream-done', () => cb()),
+  onTTSError: (cb) => ipcRenderer.on('tts:stream-error', (_, msg) => cb(msg)),
 });

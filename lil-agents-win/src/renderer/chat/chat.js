@@ -61,6 +61,7 @@ function handleSlashCommand(text) {
         <div><strong>/copy</strong> <span style="color:var(--text-dim)">copy last response</span></div>
         <div><strong>/voice</strong> <span style="color:var(--text-dim)">toggle voice recording</span></div>
         <div><strong>/asr status</strong> <span style="color:var(--text-dim)">check ASR service status</span></div>
+        <div><strong>/tts status</strong> <span style="color:var(--text-dim)">check TTS service status</span></div>
         <div><strong>/help</strong> <span style="color:var(--text-dim)">show this message</span></div>
       `;
       messages.appendChild(help);
@@ -76,6 +77,11 @@ function handleSlashCommand(text) {
       // Handle /asr subcommands
       if (cmd.startsWith('/asr')) {
         handleASRCommand(text);
+        return true;
+      }
+      // Handle /tts subcommands
+      if (cmd.startsWith('/tts')) {
+        handleTTSCommand(text);
         return true;
       }
       const err = document.createElement('div');
@@ -151,6 +157,10 @@ function endStreaming() {
     isStreaming = false;
     if (currentAssistantText) {
       lastAssistantText = currentAssistantText;
+      // Auto TTS: read aloud when enabled (silently skips if TTS off)
+      if (window._voiceOutput) {
+        window._voiceOutput.play(currentAssistantText);
+      }
     }
     currentAssistantText = '';
     currentStreamingEl = null;
@@ -319,6 +329,35 @@ async function handleASRCommand(text) {
   scrollToBottom();
 }
 
+// ---- TTS commands ----
+
+async function handleTTSCommand(text) {
+  const parts = text.split(/\s+/);
+  const sub = (parts[1] || '').toLowerCase();
+
+  if (sub === 'status') {
+    try {
+      const status = await window.lilAgents.getTTSStatus();
+      const statusText = status.ready ? 'ready' : status.status;
+      const div = document.createElement('div');
+      div.className = 'msg msg-system';
+      div.innerHTML = `<span style="color:var(--accent)">TTS:</span> ${escapeHtml(statusText)}`;
+      messages.appendChild(div);
+    } catch (e) {
+      appendError('TTS service not available');
+    }
+  } else {
+    const div = document.createElement('div');
+    div.className = 'msg msg-system';
+    div.innerHTML = `
+      <div style="font-weight:600;color:var(--accent)">TTS commands</div>
+      <div><strong>/tts status</strong> <span style="color:var(--text-dim)">check TTS service status</span></div>
+    `;
+    messages.appendChild(div);
+  }
+  scrollToBottom();
+}
+
 // ---- Voice input initialization ----
 
 const micBtn = document.getElementById('micBtn');
@@ -327,3 +366,7 @@ if (micBtn) {
     appendError(errMsg);
   });
 }
+
+// ---- TTS voice output initialization ----
+
+window._voiceOutput = new VoiceOutput();

@@ -19,6 +19,7 @@ class AppManager {
     const icon = this._createTrayIcon();
     this.tray = new Tray(icon);
     this.tray.setToolTip('lil agents');
+    this.tray.on('click', () => this.tray.popUpContextMenu());
     this._rebuildMenu();
   }
 
@@ -103,8 +104,18 @@ class AppManager {
         }
       },
       {
-        label: `Voice Input (${this._getASRStatusLabel()})`,
-        enabled: false,
+        label: 'Text to Speech',
+        type: 'checkbox',
+        checked: CharacterManager.getTTSEnabled(),
+        click: (menuItem) => {
+          CharacterManager.setTTSEnabled(menuItem.checked);
+          if (menuItem.checked) {
+            this.characterManager.ttsService.start().catch(() => {});
+          } else {
+            this.characterManager.ttsService.stop();
+          }
+          this._rebuildMenu();
+        }
       },
       { type: 'separator' },
       {
@@ -134,6 +145,15 @@ class AppManager {
   _getASRStatusLabel() {
     if (!this.characterManager || !this.characterManager.asrService) return 'N/A';
     const status = this.characterManager.asrService.getStatus();
+    if (status === 'ready') return 'Ready';
+    if (status === 'loading') return 'Loading...';
+    if (status === 'error') return 'Error';
+    return 'Stopped';
+  }
+
+  _getTTSStatusLabel() {
+    if (!this.characterManager || !this.characterManager.ttsService) return 'N/A';
+    const status = this.characterManager.ttsService.getStatus();
     if (status === 'ready') return 'Ready';
     if (status === 'loading') return 'Loading...';
     if (status === 'error') return 'Error';

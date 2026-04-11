@@ -5,6 +5,7 @@ const { ClaudeSession } = require('./claude-session');
 const { getCharacterTheme, formatTitle } = require('./themes');
 const Store = require('./store');
 const { ASRService } = require('./asr-service');
+const { TTSService } = require('./tts-service');
 
 const CHAR_WIDTH = 113;
 const CHAR_HEIGHT = 200;
@@ -600,6 +601,7 @@ class CharacterManager {
     this.animationTimer = null;
     this.onboardingComplete = Store.get('onboardingComplete', false);
     this.asrService = new ASRService();
+    this.ttsService = new TTSService();
   }
 
   init() {
@@ -621,6 +623,13 @@ class CharacterManager {
     this.asrService.start().catch(err => {
       console.error('[ASR] Auto-start failed:', err.message);
     });
+
+    // Auto-start TTS service only if enabled (default: off to save GPU memory)
+    if (CharacterManager.getTTSEnabled()) {
+      this.ttsService.start().catch(err => {
+        console.error('[TTS] Auto-start failed:', err.message);
+      });
+    }
 
     // First-run onboarding
     if (!this.onboardingComplete) {
@@ -652,6 +661,14 @@ class CharacterManager {
 
   static getSoundsEnabled() {
     return soundsEnabled;
+  }
+
+  static getTTSEnabled() {
+    return Store.get('ttsEnabled', false);
+  }
+
+  static setTTSEnabled(enabled) {
+    Store.set('ttsEnabled', enabled);
   }
 
   _setupIPC() {
@@ -709,6 +726,50 @@ class CharacterManager {
     ipcMain.handle('asr:status', async () => {
       return { status: this.asrService.getStatus(), ready: this.asrService.isReady() };
     });
+
+    // TTS IPC handlers
+    ipcMain.handle('tts:synthesize', async (event, text) => {
+      try {
+        return await this.ttsService.synthesize(text);
+      } catch (err) {
+        return { error: err.message };
+      }
+    });
+    ipcMain.handle('tts:status', async () => {
+      return { status: this.ttsService.getStatus(), ready: this.ttsService.isReady() };
+    });
+
+    // TTS streaming: synthesize sentence-by-sentence, send each chunk to renderer
+    this._ttsCancel = null;
+    ipcMain.on('tts:stream-start', (event, text) => {
+      // Cancel any in-progress stream
+      if (this._ttsCancel) { this._ttsCancel(); this._ttsCancel = null; }
+
+      this._ttsCancel = this.ttsService.synthesizeStream(
+        text,
+        (chunk) => {
+          // Send each sentence's audio to the renderer that requested it
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('tts:stream-chunk', chunk);
+          }
+        },
+        () => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('tts:stream-done');
+          }
+          this._ttsCancel = null;
+        },
+        (err) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('tts:stream-error', err.message);
+          }
+          this._ttsCancel = null;
+        }
+      );
+    });
+    ipcMain.on('tts:stream-stop', () => {
+      if (this._ttsCancel) { this._ttsCancel(); this._ttsCancel = null; }
+    });
   }
 
   _startAnimationLoop() {
@@ -731,6 +792,7 @@ class CharacterManager {
     if (this.animationTimer) clearInterval(this.animationTimer);
     for (const char of Object.values(this.characters)) char.cleanup();
     this.asrService.stop();
+    this.ttsService.stop();
   }
 }
 

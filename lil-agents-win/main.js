@@ -1,5 +1,12 @@
 const { app, dialog } = require('electron');
 
+// Prevent Electron/Chromium from disrupting Bluetooth audio profiles on startup.
+// Without these flags, Chromium's audio service initializes aggressively and causes
+// Windows to switch Bluetooth from A2DP (stereo) to Hands-Free (mono), disconnecting
+// the headset.
+app.commandLine.appendSwitch('disable-features', 'AudioServiceOutOfProcess');
+app.commandLine.appendSwitch('audio-buffer-size', '4096');
+
 // Catch errors early
 process.on('uncaughtException', (err) => {
   dialog.showErrorBox('lil agents error', err.stack || err.message);
