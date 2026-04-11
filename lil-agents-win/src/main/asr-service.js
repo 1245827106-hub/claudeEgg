@@ -33,7 +33,7 @@ class ASRService {
     const pythonPath = Store.get('asr_python_path', DEFAULT_PYTHON_PATH);
     const modelPath = Store.get('asr_model_path', DEFAULT_MODEL_PATH);
     const port = Store.get('asr_port', DEFAULT_PORT);
-    const language = Store.get('asr_language', '');
+    const language = Store.get('asr_language', 'Chinese');
     const scriptPath = path.join(__dirname, '..', 'asr', 'asr_server.py');
 
     console.log(`[ASR] Starting service: ${pythonPath} ${scriptPath}`);
@@ -142,7 +142,7 @@ class ASRService {
 
     return new Promise((resolve, reject) => {
       const boundary = '----LilAgentsBoundary' + Date.now();
-      const language = Store.get('asr_language', '');
+      const language = Store.get('asr_language', 'Chinese');
 
       // Build multipart body
       const parts = [];
