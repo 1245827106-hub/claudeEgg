@@ -27,9 +27,16 @@ import os
 import re
 import time
 import traceback
+import warnings
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import threading
+
+# Suppress noisy warnings from transformers/torch
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+warnings.filterwarnings("ignore", message=".*Setting `pad_token_id`.*")
+warnings.filterwarnings("ignore", message=".*flash attention.*")
+warnings.filterwarnings("ignore", message=".*not a valid Python identifier.*")
 
 import numpy as np
 import soundfile as sf

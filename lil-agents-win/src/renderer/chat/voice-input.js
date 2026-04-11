@@ -13,21 +13,12 @@ class VoiceInput {
     this.audioChunks = [];
     this.stream = null;
     this.maxDurationTimer = null;
+    this._busy = false;
     this.micBtn.addEventListener('click', () => this.toggle());
-
-    // Pre-warm: acquire mic once to force Bluetooth SCO init, then release
-    this._warmUpMic();
-  }
-
-  async _warmUpMic() {
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
-      s.getTracks().forEach(t => t.stop());
-      console.log('[VoiceInput] Mic pre-warmed');
-    } catch { /* ignore */ }
   }
 
   async toggle() {
+    if (this._busy) return;
     if (this.state === 'idle') await this.startRecording();
     else if (this.state === 'recording') this.stopRecording();
   }
@@ -45,6 +36,7 @@ class VoiceInput {
     }
 
     try {
+      this._busy = true;
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
@@ -64,6 +56,8 @@ class VoiceInput {
         : err.name === 'NotAllowedError' ? 'Microphone permission denied'
         : 'Microphone error: ' + err.message;
       this.onError(msg);
+    } finally {
+      this._busy = false;
     }
   }
 
@@ -77,9 +71,11 @@ class VoiceInput {
     this.setState('transcribing');
     try {
       const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-      if (audioBlob.size < 100) { this.onError('No speech detected'); this.setState('idle'); return; }
+      console.log(`[VoiceInput] chunks=${this.audioChunks.length}, blobSize=${audioBlob.size}`);
+      if (audioBlob.size < 100) { console.log('[VoiceInput] Blob too small, skipping'); this.onError('No speech detected'); this.setState('idle'); return; }
 
       const result = await window.lilAgents.transcribeAudio(await audioBlob.arrayBuffer());
+      console.log('[VoiceInput] ASR result:', JSON.stringify(result));
       if (result.error) {
         this.onError(result.error);
       } else if (result.text?.trim()) {

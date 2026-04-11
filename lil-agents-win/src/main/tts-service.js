@@ -43,6 +43,7 @@ class TTSService {
         env: {
           ...process.env,
           TTS_PORT: String(port),
+          PYTHONIOENCODING: 'utf-8',
         },
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,

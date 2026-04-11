@@ -718,8 +718,13 @@ class CharacterManager {
     // ASR IPC handlers
     ipcMain.handle('asr:transcribe', async (event, audioData) => {
       try {
-        return await this.asrService.transcribe(Buffer.from(audioData));
+        const buf = Buffer.from(audioData);
+        console.log(`[ASR IPC] Received audio: ${buf.length} bytes`);
+        const result = await this.asrService.transcribe(buf);
+        console.log(`[ASR IPC] Result: ${JSON.stringify(result)}`);
+        return result;
       } catch (err) {
+        console.error(`[ASR IPC] Error: ${err.message}`);
         return { error: err.message };
       }
     });

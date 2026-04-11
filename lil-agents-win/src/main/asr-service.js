@@ -46,6 +46,7 @@ class ASRService {
           ASR_MODEL_PATH: modelPath,
           ASR_PORT: String(port),
           ASR_LANGUAGE: language,
+          PYTHONIOENCODING: 'utf-8',
         },
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,

@@ -18,9 +18,15 @@ import subprocess
 import sys
 import tempfile
 import traceback
+import warnings
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import threading
+
+# Suppress noisy warnings from transformers/torch
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+warnings.filterwarnings("ignore", message=".*generation flags are not valid.*")
+warnings.filterwarnings("ignore", message=".*Setting `pad_token_id`.*")
 
 import numpy as np
 import soundfile as sf
@@ -142,6 +148,9 @@ def transcribe_audio(audio_bytes, language=None):
 
     audio_input = (np.asarray(audio_data, dtype=np.float32), int(sr))
 
+    duration = len(audio_data) / sr
+    print(f"[ASR] Audio: {duration:.1f}s, sr={sr}, samples={len(audio_data)}", flush=True)
+
     results = model.transcribe(
         audio=audio_input,
         language=language,
@@ -149,7 +158,9 @@ def transcribe_audio(audio_bytes, language=None):
     )
 
     if results and len(results) > 0:
+        print(f"[ASR] Result: lang={results[0].language}, text='{results[0].text}'", flush=True)
         return {"language": results[0].language, "text": results[0].text}
+    print("[ASR] Result: empty", flush=True)
     return {"language": "", "text": ""}
 
 

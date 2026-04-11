@@ -360,6 +360,11 @@ async function handleTTSCommand(text) {
 
 // ---- Voice input initialization ----
 
+// Pre-warm microphone: force Bluetooth SCO channel init before user clicks
+navigator.mediaDevices.getUserMedia({ audio: true })
+  .then(s => { s.getTracks().forEach(t => t.stop()); console.log('[Mic] Pre-warmed'); })
+  .catch(() => {});
+
 const micBtn = document.getElementById('micBtn');
 if (micBtn) {
   window._voiceInput = new VoiceInput(micBtn, inputField, (errMsg) => {
