@@ -117,6 +117,15 @@ class AppManager {
           this._rebuildMenu();
         }
       },
+      {
+        label: 'Wake Word (小爱)',
+        type: 'checkbox',
+        checked: CharacterManager.getWakewordEnabled(),
+        click: (menuItem) => {
+          this.characterManager.setWakewordEnabled(menuItem.checked);
+          this._rebuildMenu();
+        }
+      },
       { type: 'separator' },
       {
         label: 'Quit',

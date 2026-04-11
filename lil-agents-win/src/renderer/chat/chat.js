@@ -372,6 +372,15 @@ if (micBtn) {
   });
 }
 
+// ---- Wake word trigger: auto-start ASR recording ----
+
+window.lilAgents.onStartASR(() => {
+  if (window._voiceInput) {
+    console.log('[Chat] Wake word triggered ASR recording');
+    window._voiceInput.startFromWakeword();
+  }
+});
+
 // ---- TTS voice output initialization ----
 
 window._voiceOutput = new VoiceOutput();

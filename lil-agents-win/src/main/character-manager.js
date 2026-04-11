@@ -6,6 +6,7 @@ const { getCharacterTheme, formatTitle } = require('./themes');
 const Store = require('./store');
 const { ASRService } = require('./asr-service');
 const { TTSService } = require('./tts-service');
+const { WakewordService } = require('./wakeword-service');
 
 const CHAR_WIDTH = 113;
 const CHAR_HEIGHT = 200;
@@ -602,6 +603,8 @@ class CharacterManager {
     this.onboardingComplete = Store.get('onboardingComplete', false);
     this.asrService = new ASRService();
     this.ttsService = new TTSService();
+    this.wakewordService = new WakewordService();
+    this.lastActiveCharacterId = 'bruce';
   }
 
   init() {
@@ -628,6 +631,16 @@ class CharacterManager {
     if (CharacterManager.getTTSEnabled()) {
       this.ttsService.start().catch(err => {
         console.error('[TTS] Auto-start failed:', err.message);
+      });
+    }
+
+    // Auto-start wake word service if enabled
+    if (Store.get('wakewordEnabled', false)) {
+      this.wakewordService.onWakeword = () => this._handleWakewordDetected();
+      this.wakewordService.start().then(() => {
+        this.wakewordService.startListening();
+      }).catch(err => {
+        console.error('[Wakeword] Auto-start failed:', err.message);
       });
     }
 
@@ -671,10 +684,69 @@ class CharacterManager {
     Store.set('ttsEnabled', enabled);
   }
 
+  static getWakewordEnabled() {
+    return Store.get('wakewordEnabled', false);
+  }
+
+  setWakewordEnabled(enabled) {
+    Store.set('wakewordEnabled', enabled);
+    if (enabled) {
+      this.wakewordService.onWakeword = () => this._handleWakewordDetected();
+      this.wakewordService.start().then(() => {
+        this.wakewordService.startListening();
+      }).catch(err => console.error('[Wakeword] Start failed:', err.message));
+    } else {
+      this.wakewordService.stop();
+    }
+  }
+
+  _handleWakewordDetected() {
+    console.log('[Wakeword] === _handleWakewordDetected called ===');
+    const charId = this.lastActiveCharacterId || 'bruce';
+    const char = this.characters[charId];
+    if (!char) { console.log('[Wakeword] No character found for id:', charId); return; }
+
+    if (char._voiceInputActive) { console.log('[Wakeword] Voice already active, ignoring'); return; }
+
+    console.log('[Wakeword] Pausing wake word listening...');
+    this.wakewordService.stopListening();
+
+    const sendStartASR = (delay) => {
+      setTimeout(() => {
+        if (char.chatWindow && !char.chatWindow.isDestroyed()) {
+          console.log('[Wakeword] Sending chat:start-asr to chat window');
+          try {
+            char.chatWindow.webContents.send('chat:start-asr');
+          } catch (e) { console.error('[Wakeword] Error sending start-asr:', e.message); }
+        }
+      }, delay);
+    };
+
+    if (char.isIdleForPopover) {
+      console.log('[Wakeword] Chat already open, triggering ASR');
+      sendStartASR(300);
+    } else {
+      console.log('[Wakeword] Opening popover for character:', charId);
+      char.openPopover();
+      // Use fixed delay instead of did-finish-load to avoid race conditions
+      // Local HTML loads in <500ms, 1.5s is a safe margin
+      sendStartASR(1500);
+    }
+
+    console.log('[Wakeword] Will resume listening in 10 seconds');
+    setTimeout(() => {
+      if (Store.get('wakewordEnabled', false)) {
+        console.log('[Wakeword] Resuming wake word listening');
+        this.wakewordService.startListening();
+      }
+    }, 10000);
+  }
+
   _setupIPC() {
     ipcMain.on('character:clicked', (event) => {
       for (const char of Object.values(this.characters)) {
         if (char.window && !char.window.isDestroyed() && char.window.webContents === event.sender) {
+          this.lastActiveCharacterId = char.config.id;
           char.handleClick(); return;
         }
       }
@@ -710,6 +782,15 @@ class CharacterManager {
       for (const char of Object.values(this.characters)) {
         if (char.chatWindow && !char.chatWindow.isDestroyed() && char.chatWindow.webContents === event.sender) {
           char._voiceInputActive = active;
+          // Resume wake word listening when chat recording ends
+          if (!active && Store.get('wakewordEnabled', false)) {
+            console.log('[Wakeword] Voice recording ended, resuming listening in 2s');
+            setTimeout(() => {
+              if (Store.get('wakewordEnabled', false)) {
+                this.wakewordService.startListening();
+              }
+            }, 2000);
+          }
           return;
         }
       }
@@ -804,6 +885,7 @@ class CharacterManager {
     for (const char of Object.values(this.characters)) char.cleanup();
     this.asrService.stop();
     this.ttsService.stop();
+    this.wakewordService.stop();
   }
 }
 

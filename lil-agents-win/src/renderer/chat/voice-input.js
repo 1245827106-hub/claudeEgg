@@ -23,6 +23,11 @@ class VoiceInput {
     else if (this.state === 'recording') this.stopRecording();
   }
 
+  async startFromWakeword() {
+    if (this.state !== 'idle') return;
+    await this.startRecording();
+  }
+
   async startRecording() {
     try {
       const status = await window.lilAgents.getASRStatus();

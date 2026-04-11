@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('lilAgents', {
   getASRStatus: () => ipcRenderer.invoke('asr:status'),
   setVoiceActive: (active) => ipcRenderer.send('voice:active', active),
 
+  // Wake word trigger
+  onStartASR: (cb) => ipcRenderer.on('chat:start-asr', () => cb()),
+
   // TTS APIs
   synthesizeText: (text) => ipcRenderer.invoke('tts:synthesize', text),
   getTTSStatus: () => ipcRenderer.invoke('tts:status'),
