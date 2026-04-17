@@ -6,6 +6,12 @@ const { execSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+// Windows console defaults to GBK (cp936) which mangles the UTF-8 JSON that
+// the Python ASR/TTS services print. Switch the shared console to UTF-8.
+if (process.platform === 'win32') {
+  try { execSync('chcp 65001', { stdio: 'ignore' }); } catch {}
+}
+
 const electronDir = path.join(__dirname, 'node_modules', 'electron', 'dist');
 const appDir = path.join(electronDir, 'resources', 'app');
 const srcDir = __dirname;
