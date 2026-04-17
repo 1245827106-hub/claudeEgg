@@ -33,8 +33,13 @@ import soundfile as sf
 # --- Configuration ---
 PORT = int(os.environ.get("WAKEWORD_PORT", "18922"))
 ASR_URL = os.environ.get("ASR_URL", "http://127.0.0.1:18920")
-# Wake words are hardcoded to avoid Windows env var encoding issues (GBK vs UTF-8)
-WAKE_WORDS = ["小爱", "小艾", "小哎"]
+# Wake words are hardcoded to avoid Windows env var encoding issues (GBK vs UTF-8).
+# Includes tolerance variants because the leading "小" is often dropped or
+# misheard as "哎"/"诶"/"爱" by the ASR, producing strings like "哎同学".
+WAKE_WORDS = [
+    "小爱", "小艾", "小哎",
+    "爱同学", "哎同学", "诶同学", "艾同学",
+]
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
@@ -46,7 +51,7 @@ SPEECH_MIN_DURATION = 0.2   # seconds of continuous speech before recording (red
 RECORD_DURATION = 2.0       # seconds to record for ASR check
 COOLDOWN = 3.0              # seconds between ASR checks
 SILENCE_TIMEOUT = 0.5       # seconds of silence to reset VAD
-LOOKBACK_SECONDS = 0.5      # seconds of audio to prepend before speech onset
+LOOKBACK_SECONDS = 0.8      # seconds of audio to prepend before speech onset (raised from 0.5 to better capture soft "小" onset)
 
 # --- Global state ---
 listening = False

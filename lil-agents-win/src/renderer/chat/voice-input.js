@@ -3,6 +3,23 @@
  * Uses MediaRecorder -> raw WebM -> backend ffmpeg + Qwen3-ASR
  * States: idle -> recording -> transcribing -> idle
  */
+
+// VAD end-of-speech thresholds (front-end only).
+// Browser's autoGainControl amplifies background noise, so a fixed floor
+// (like Python's 0.015) is unreliable. We sample the first CALIBRATION window
+// as ambient noise, then require RMS > max(ABS_MIN, baseline * MULT) to count
+// as speech.
+const VAD_TICK_MS = 50;
+const VAD_CALIBRATION_MS = 500;
+const VAD_SPEECH_MULT = 2.5;       // rms must exceed baseline * 2.5 to count as speech
+const VAD_ABS_MIN = 0.012;         // absolute floor regardless of baseline
+const VAD_SILENCE_MS = 1200;       // continuous silence to call "done"
+const VAD_MIN_RECORD_MS = 1000;    // protect against false trigger on short utterances
+const VAD_NO_SPEECH_MS = 3000;     // give up if user never spoke
+const MAX_RECORD_MS_VAD = 30000;   // auto-end mode hard cap
+const MAX_RECORD_MS_MANUAL = 60000; // wakeword / legacy path cap
+const VAD_DEBUG = true;            // log every 10 ticks (~500ms) to tune thresholds
+
 class VoiceInput {
   constructor(micBtn, inputField, onError) {
     this.micBtn = micBtn;
@@ -14,21 +31,34 @@ class VoiceInput {
     this.stream = null;
     this.maxDurationTimer = null;
     this._busy = false;
+
+    // VAD end-of-speech detection state
+    this.vadTimer = null;
+    this.audioContext = null;
+    this.analyser = null;
+    this._vadBuffer = null;
+    this._vadStartTime = 0;
+    this._vadSilenceMs = 0;
+    this._vadHadSpeech = false;
+    this._vadBaseline = 0;
+    this._vadThreshold = 0;
+    this._vadTickCount = 0;
+
     this.micBtn.addEventListener('click', () => this.toggle());
   }
 
   async toggle() {
     if (this._busy) return;
-    if (this.state === 'idle') await this.startRecording();
+    if (this.state === 'idle') await this.startRecording({ autoEnd: true });
     else if (this.state === 'recording') this.stopRecording();
   }
 
   async startFromWakeword() {
     if (this.state !== 'idle') return;
-    await this.startRecording();
+    await this.startRecording({ autoEnd: true });
   }
 
-  async startRecording() {
+  async startRecording({ autoEnd = false } = {}) {
     try {
       const status = await window.lilAgents.getASRStatus();
       if (!status.ready) {
@@ -55,7 +85,11 @@ class VoiceInput {
 
       this.mediaRecorder.start(500);
       this.setState('recording');
-      this.maxDurationTimer = setTimeout(() => { if (this.state === 'recording') this.stopRecording(); }, 60000);
+
+      if (autoEnd) this._startVAD();
+
+      const maxDuration = autoEnd ? MAX_RECORD_MS_VAD : MAX_RECORD_MS_MANUAL;
+      this.maxDurationTimer = setTimeout(() => { if (this.state === 'recording') this.stopRecording(); }, maxDuration);
     } catch (err) {
       const msg = err.name === 'NotFoundError' ? 'No microphone detected'
         : err.name === 'NotAllowedError' ? 'Microphone permission denied'
@@ -67,9 +101,93 @@ class VoiceInput {
   }
 
   stopRecording() {
+    this._stopVAD();
     if (this.maxDurationTimer) { clearTimeout(this.maxDurationTimer); this.maxDurationTimer = null; }
     if (this.mediaRecorder?.state === 'recording') this.mediaRecorder.stop();
     if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; }
+  }
+
+  _startVAD() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      this.audioContext = new AudioCtx();
+      const source = this.audioContext.createMediaStreamSource(this.stream);
+      this.analyser = this.audioContext.createAnalyser();
+      this.analyser.fftSize = 512;
+      source.connect(this.analyser);
+      this._vadBuffer = new Float32Array(this.analyser.fftSize);
+    } catch (err) {
+      console.warn('[VAD] Audio graph setup failed, falling back to manual stop:', err.message);
+      this._stopVAD();
+      return;
+    }
+
+    this._vadStartTime = Date.now();
+    this._vadSilenceMs = 0;
+    this._vadHadSpeech = false;
+    this._vadBaseline = 0;
+    this._vadThreshold = 0;
+    this._vadTickCount = 0;
+    let baselineSum = 0;
+    let baselineCount = 0;
+
+    this.vadTimer = setInterval(() => {
+      if (!this.analyser) return;
+      this.analyser.getFloatTimeDomainData(this._vadBuffer);
+      let sum = 0;
+      for (let i = 0; i < this._vadBuffer.length; i++) {
+        sum += this._vadBuffer[i] * this._vadBuffer[i];
+      }
+      const rms = Math.sqrt(sum / this._vadBuffer.length);
+      const elapsed = Date.now() - this._vadStartTime;
+
+      // Phase 1: calibrate ambient noise baseline
+      if (elapsed < VAD_CALIBRATION_MS) {
+        baselineSum += rms;
+        baselineCount++;
+        return;
+      }
+      if (this._vadThreshold === 0) {
+        this._vadBaseline = baselineCount > 0 ? baselineSum / baselineCount : VAD_ABS_MIN;
+        this._vadThreshold = Math.max(VAD_ABS_MIN, this._vadBaseline * VAD_SPEECH_MULT);
+        console.log(`[VAD] Calibrated baseline=${this._vadBaseline.toFixed(4)} threshold=${this._vadThreshold.toFixed(4)}`);
+      }
+
+      // Phase 2: speech / silence tracking
+      const isSpeech = rms > this._vadThreshold;
+      if (isSpeech) {
+        this._vadSilenceMs = 0;
+        this._vadHadSpeech = true;
+      } else {
+        this._vadSilenceMs += VAD_TICK_MS;
+      }
+
+      if (VAD_DEBUG && ++this._vadTickCount % 10 === 0) {
+        console.log(`[VAD] rms=${rms.toFixed(4)} thr=${this._vadThreshold.toFixed(4)} speech=${isSpeech} silenceMs=${this._vadSilenceMs} hadSpeech=${this._vadHadSpeech}`);
+      }
+
+      if (elapsed < VAD_MIN_RECORD_MS) return;
+
+      if (!this._vadHadSpeech && elapsed >= VAD_NO_SPEECH_MS) {
+        console.log('[VAD] No speech detected, aborting');
+        this.stopRecording();
+        return;
+      }
+      if (this._vadHadSpeech && this._vadSilenceMs >= VAD_SILENCE_MS) {
+        console.log(`[VAD] End of speech after ${elapsed}ms (baseline=${this._vadBaseline.toFixed(4)}, threshold=${this._vadThreshold.toFixed(4)})`);
+        this.stopRecording();
+      }
+    }, VAD_TICK_MS);
+  }
+
+  _stopVAD() {
+    if (this.vadTimer) { clearInterval(this.vadTimer); this.vadTimer = null; }
+    if (this.audioContext) {
+      try { this.audioContext.close(); } catch {}
+      this.audioContext = null;
+    }
+    this.analyser = null;
+    this._vadBuffer = null;
   }
 
   async _processAudio() {
