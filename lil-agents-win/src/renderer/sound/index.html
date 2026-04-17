@@ -1,5 +1,20 @@
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"></head>
-<body><script>
-// Sound player - receives commands via executeJavaScript
-</script></body></html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body>
+<script>
+  // Hidden audio player. The main process sends sound:play with a file URL and
+  // optional volume; we play it without ever injecting untrusted strings into
+  // executeJavaScript.
+  if (window.lilAgents && window.lilAgents.onPlaySound) {
+    window.lilAgents.onPlaySound(({ url, volume }) => {
+      try {
+        const audio = new Audio(url);
+        audio.volume = typeof volume === 'number' ? volume : 0.6;
+        audio.play().catch(() => {});
+      } catch { /* ignore playback errors */ }
+    });
+  }
+</script>
+</body>
+</html>

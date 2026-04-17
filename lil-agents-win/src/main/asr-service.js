@@ -6,11 +6,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
-const Store = require('./store');
-
-const DEFAULT_PYTHON_PATH = 'E:/Qwen3-ASR/envs/qwen3-asr/python.exe';
-const DEFAULT_MODEL_PATH = 'E:/Qwen3-ASR/models/Qwen3-ASR-1.7B';
-const DEFAULT_PORT = 18920;
+const config = require('./config');
 
 class ASRService {
   constructor() {
@@ -19,6 +15,8 @@ class ASRService {
     this.starting = false;
     this.error = null;
     this._healthCheckTimer = null;
+    this._restartTimer = null;
+    this._stopped = false;
   }
 
   /**
@@ -26,14 +24,12 @@ class ASRService {
    */
   async start() {
     if (this.process || this.starting) return;
+    this._stopped = false;
     this.starting = true;
     this.ready = false;
     this.error = null;
 
-    const pythonPath = Store.get('asr_python_path', DEFAULT_PYTHON_PATH);
-    const modelPath = Store.get('asr_model_path', DEFAULT_MODEL_PATH);
-    const port = Store.get('asr_port', DEFAULT_PORT);
-    const language = Store.get('asr_language', 'Chinese');
+    const { pythonPath, modelPath, port, language } = config.getASRConfig();
     const scriptPath = path.join(__dirname, '..', 'asr', 'asr_server.py');
 
     console.log(`[ASR] Starting service: ${pythonPath} ${scriptPath}`);
@@ -75,11 +71,14 @@ class ASRService {
         this.ready = false;
         this.starting = false;
         this.process = null;
-        // Auto-restart on unexpected exit
-        if (code !== 0 && code !== null) {
+        // Auto-restart on unexpected exit — skip if stop() was called.
+        if (!this._stopped && code !== 0 && code !== null) {
           this.error = `Process exited with code ${code}`;
           console.log('[ASR] Will attempt restart in 5 seconds...');
-          setTimeout(() => this.start(), 5000);
+          this._restartTimer = setTimeout(() => {
+            this._restartTimer = null;
+            if (!this._stopped) this.start();
+          }, 5000);
         }
       });
 
@@ -96,9 +95,14 @@ class ASRService {
    * Stop the Python ASR service.
    */
   async stop() {
+    this._stopped = true;
     if (this._healthCheckTimer) {
       clearInterval(this._healthCheckTimer);
       this._healthCheckTimer = null;
+    }
+    if (this._restartTimer) {
+      clearTimeout(this._restartTimer);
+      this._restartTimer = null;
     }
     if (this.process) {
       this.process.kill();
@@ -138,11 +142,10 @@ class ASRService {
       throw new Error('ASR service not running');
     }
 
-    const port = Store.get('asr_port', DEFAULT_PORT);
+    const { port, language } = config.getASRConfig();
 
     return new Promise((resolve, reject) => {
       const boundary = '----LilAgentsBoundary' + Date.now();
-      const language = Store.get('asr_language', 'Chinese');
 
       // Build multipart body
       const parts = [];
@@ -216,7 +219,7 @@ class ASRService {
    * Poll /health until the service reports ready.
    */
   _startHealthCheck() {
-    const port = Store.get('asr_port', DEFAULT_PORT);
+    const { port } = config.getASRConfig();
     let attempts = 0;
     const maxAttempts = 120; // 2 minutes at 1s interval
 

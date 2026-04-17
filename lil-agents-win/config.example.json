@@ -1,0 +1,14 @@
+{
+  "_comment": "Copy this file to config.json (same directory as package.json) and edit paths for your machine. Values here take precedence over built-in fallbacks but are overridden by environment variables (LIL_ASR_PYTHON, LIL_TTS_PYTHON, LIL_WAKEWORD_PYTHON, LIL_ASR_MODEL, LIL_ASR_PORT, LIL_TTS_PORT, LIL_WAKEWORD_PORT, LIL_ASR_LANGUAGE) and runtime UI settings.",
+
+  "asr_python_path": "C:/path/to/your/asr-env/python.exe",
+  "asr_model_path": "C:/path/to/Qwen3-ASR-1.7B",
+  "asr_port": 18920,
+  "asr_language": "Chinese",
+
+  "tts_python_path": "C:/path/to/your/tts-env/python.exe",
+  "tts_port": 18921,
+
+  "wakeword_python_path": null,
+  "wakeword_port": 18922
+}

@@ -39,64 +39,41 @@ class AppManager {
     }));
   }
 
+  _buildCharacterMenu(characterId, label) {
+    const visibilityKey = `${characterId}Visible`;
+    return {
+      label,
+      submenu: [
+        {
+          label: 'Show',
+          type: 'checkbox',
+          checked: Store.get(visibilityKey, true),
+          click: (menuItem) => {
+            const char = this.characterManager.characters[characterId];
+            Store.set(visibilityKey, menuItem.checked);
+            if (!char) return;
+            if (menuItem.checked) {
+              if (char.window && !char.window.isDestroyed()) char.window.show();
+            } else {
+              if (char.window && !char.window.isDestroyed()) char.window.hide();
+              char._hideBubble();
+              if (char.chatWindow && !char.chatWindow.isDestroyed()) char.chatWindow.hide();
+              char.isIdleForPopover = false;
+            }
+          }
+        },
+        { type: 'separator' },
+        { label: 'Theme', submenu: this._buildCharacterThemeSubmenu(characterId) },
+      ],
+    };
+  }
+
   _rebuildMenu() {
     const contextMenu = Menu.buildFromTemplate([
       { label: 'lil agents', enabled: false },
       { type: 'separator' },
-      {
-        label: 'Bruce',
-        submenu: [
-          {
-            label: 'Show',
-            type: 'checkbox',
-            checked: Store.get('bruceVisible', true),
-            click: (menuItem) => {
-              const bruce = this.characterManager.characters.bruce;
-              Store.set('bruceVisible', menuItem.checked);
-              if (menuItem.checked) {
-                if (bruce.window && !bruce.window.isDestroyed()) bruce.window.show();
-              } else {
-                if (bruce.window && !bruce.window.isDestroyed()) bruce.window.hide();
-                bruce._hideBubble();
-                if (bruce.chatWindow && !bruce.chatWindow.isDestroyed()) bruce.chatWindow.hide();
-                bruce.isIdleForPopover = false;
-              }
-            }
-          },
-          { type: 'separator' },
-          {
-            label: 'Theme',
-            submenu: this._buildCharacterThemeSubmenu('bruce'),
-          }
-        ]
-      },
-      {
-        label: 'Jazz',
-        submenu: [
-          {
-            label: 'Show',
-            type: 'checkbox',
-            checked: Store.get('jazzVisible', true),
-            click: (menuItem) => {
-              const jazz = this.characterManager.characters.jazz;
-              Store.set('jazzVisible', menuItem.checked);
-              if (menuItem.checked) {
-                if (jazz.window && !jazz.window.isDestroyed()) jazz.window.show();
-              } else {
-                if (jazz.window && !jazz.window.isDestroyed()) jazz.window.hide();
-                jazz._hideBubble();
-                if (jazz.chatWindow && !jazz.chatWindow.isDestroyed()) jazz.chatWindow.hide();
-                jazz.isIdleForPopover = false;
-              }
-            }
-          },
-          { type: 'separator' },
-          {
-            label: 'Theme',
-            submenu: this._buildCharacterThemeSubmenu('jazz'),
-          }
-        ]
-      },
+      this._buildCharacterMenu('bruce', 'Bruce'),
+      this._buildCharacterMenu('jazz', 'Jazz'),
       { type: 'separator' },
       {
         label: 'Sound Effects',

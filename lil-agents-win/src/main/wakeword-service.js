@@ -7,10 +7,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
-const Store = require('./store');
-
-const DEFAULT_PYTHON_PATH = 'E:/Qwen3-ASR/envs/qwen3-asr/python.exe';
-const DEFAULT_PORT = 18922;
+const config = require('./config');
 
 class WakewordService {
   constructor() {
@@ -19,10 +16,13 @@ class WakewordService {
     this.starting = false;
     this.error = null;
     this._healthCheckTimer = null;
+    this._restartTimer = null;
+    this._sseReconnectTimer = null;
     this._sseReq = null;        // SSE long-polling connection
     this._sseBuf = '';          // SSE parse buffer
     this.onWakeword = null;     // callback: called when wake word detected
     this._autoListenOnReady = false;
+    this._stopped = false;
   }
 
   /**
@@ -33,14 +33,12 @@ class WakewordService {
       console.log('[Wakeword] Already started or starting, skipping');
       return;
     }
+    this._stopped = false;
     this.starting = true;
     this.ready = false;
     this.error = null;
 
-    const pythonPath = Store.get('wakeword_python_path',
-      Store.get('asr_python_path', DEFAULT_PYTHON_PATH));
-    const port = Store.get('wakeword_port', DEFAULT_PORT);
-    const asrPort = Store.get('asr_port', 18920);
+    const { pythonPath, port, asrPort } = config.getWakewordConfig();
     const scriptPath = path.join(__dirname, '..', 'asr', 'wakeword_server.py');
 
     console.log(`[Wakeword] Starting service: ${pythonPath} ${scriptPath}`);
@@ -84,10 +82,13 @@ class WakewordService {
         this.starting = false;
         this.process = null;
         this._disconnectSSE();
-        if (code !== 0 && code !== null) {
+        if (!this._stopped && code !== 0 && code !== null) {
           this.error = `Process exited with code ${code}`;
           console.log('[Wakeword] Will attempt restart in 5 seconds...');
-          setTimeout(() => this.start(), 5000);
+          this._restartTimer = setTimeout(() => {
+            this._restartTimer = null;
+            if (!this._stopped) this.start();
+          }, 5000);
         }
       });
 
@@ -101,10 +102,19 @@ class WakewordService {
 
   async stop() {
     console.log('[Wakeword] Stopping service...');
+    this._stopped = true;
     this._disconnectSSE();
     if (this._healthCheckTimer) {
       clearInterval(this._healthCheckTimer);
       this._healthCheckTimer = null;
+    }
+    if (this._restartTimer) {
+      clearTimeout(this._restartTimer);
+      this._restartTimer = null;
+    }
+    if (this._sseReconnectTimer) {
+      clearTimeout(this._sseReconnectTimer);
+      this._sseReconnectTimer = null;
     }
     if (this.process) {
       this.process.kill();
@@ -130,7 +140,7 @@ class WakewordService {
       return;
     }
     this._autoListenOnReady = false;
-    const port = Store.get('wakeword_port', DEFAULT_PORT);
+    const { port } = config.getWakewordConfig();
     console.log(`[Wakeword] Sending POST /start to port ${port}`);
 
     return new Promise((resolve) => {
@@ -157,7 +167,7 @@ class WakewordService {
   async stopListening() {
     this._autoListenOnReady = false;
     if (!this.ready) return;
-    const port = Store.get('wakeword_port', DEFAULT_PORT);
+    const { port } = config.getWakewordConfig();
     console.log(`[Wakeword] Sending POST /stop to port ${port}`);
 
     return new Promise((resolve) => {
@@ -186,7 +196,7 @@ class WakewordService {
       console.log('[Wakeword] SSE already connected');
       return;
     }
-    const port = Store.get('wakeword_port', DEFAULT_PORT);
+    const { port } = config.getWakewordConfig();
 
     console.log(`[Wakeword] Connecting SSE to port ${port}...`);
     this._sseBuf = '';
@@ -208,8 +218,11 @@ class WakewordService {
       res.on('end', () => {
         console.log('[Wakeword] SSE connection closed by server');
         this._sseReq = null;
-        if (this.ready) {
-          setTimeout(() => this._connectSSE(), 2000);
+        if (this.ready && !this._stopped) {
+          this._sseReconnectTimer = setTimeout(() => {
+            this._sseReconnectTimer = null;
+            if (!this._stopped) this._connectSSE();
+          }, 2000);
         }
       });
     });
@@ -217,8 +230,11 @@ class WakewordService {
     this._sseReq.on('error', (err) => {
       console.error(`[Wakeword] SSE connection error: ${err.message}`);
       this._sseReq = null;
-      if (this.ready) {
-        setTimeout(() => this._connectSSE(), 3000);
+      if (this.ready && !this._stopped) {
+        this._sseReconnectTimer = setTimeout(() => {
+          this._sseReconnectTimer = null;
+          if (!this._stopped) this._connectSSE();
+        }, 3000);
       }
     });
   }
@@ -267,7 +283,7 @@ class WakewordService {
   }
 
   _startHealthCheck() {
-    const port = Store.get('wakeword_port', DEFAULT_PORT);
+    const { port } = config.getWakewordConfig();
     let attempts = 0;
     const maxAttempts = 60;
 

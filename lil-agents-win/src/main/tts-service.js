@@ -8,10 +8,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
-const Store = require('./store');
-
-const DEFAULT_PYTHON_PATH = 'C:/Users/ZMJ/miniconda3/envs/lilvoice/python.exe';
-const DEFAULT_PORT = 18921;
+const config = require('./config');
 
 class TTSService {
   constructor() {
@@ -20,6 +17,8 @@ class TTSService {
     this.starting = false;
     this.error = null;
     this._healthCheckTimer = null;
+    this._restartTimer = null;
+    this._stopped = false;
   }
 
   /**
@@ -27,12 +26,12 @@ class TTSService {
    */
   async start() {
     if (this.process || this.starting) return;
+    this._stopped = false;
     this.starting = true;
     this.ready = false;
     this.error = null;
 
-    const pythonPath = Store.get('tts_python_path', DEFAULT_PYTHON_PATH);
-    const port = Store.get('tts_port', DEFAULT_PORT);
+    const { pythonPath, port } = config.getTTSConfig();
     const scriptPath = path.join(__dirname, '..', 'asr', 'tts_server.py');
 
     console.log(`[TTS] Starting service: ${pythonPath} ${scriptPath}`);
@@ -72,11 +71,14 @@ class TTSService {
         this.ready = false;
         this.starting = false;
         this.process = null;
-        // Auto-restart on unexpected exit
-        if (code !== 0 && code !== null) {
+        // Auto-restart on unexpected exit — skip if stop() was called.
+        if (!this._stopped && code !== 0 && code !== null) {
           this.error = `Process exited with code ${code}`;
           console.log('[TTS] Will attempt restart in 5 seconds...');
-          setTimeout(() => this.start(), 5000);
+          this._restartTimer = setTimeout(() => {
+            this._restartTimer = null;
+            if (!this._stopped) this.start();
+          }, 5000);
         }
       });
 
@@ -93,9 +95,14 @@ class TTSService {
    * Stop the Python TTS service.
    */
   async stop() {
+    this._stopped = true;
     if (this._healthCheckTimer) {
       clearInterval(this._healthCheckTimer);
       this._healthCheckTimer = null;
+    }
+    if (this._restartTimer) {
+      clearTimeout(this._restartTimer);
+      this._restartTimer = null;
     }
     if (this.process) {
       this.process.kill();
@@ -136,7 +143,7 @@ class TTSService {
       throw new Error('TTS service not running');
     }
 
-    const port = Store.get('tts_port', DEFAULT_PORT);
+    const { port } = config.getTTSConfig();
 
     return new Promise((resolve, reject) => {
       const body = JSON.stringify({ text });
@@ -197,7 +204,7 @@ class TTSService {
       return () => {};
     }
 
-    const port = Store.get('tts_port', DEFAULT_PORT);
+    const { port } = config.getTTSConfig();
     const body = JSON.stringify({ text, stream: true });
 
     let cancelled = false;
@@ -268,7 +275,7 @@ class TTSService {
    * Poll /health until the service reports ready.
    */
   _startHealthCheck() {
-    const port = Store.get('tts_port', DEFAULT_PORT);
+    const { port } = config.getTTSConfig();
     let attempts = 0;
     const maxAttempts = 120; // 2 minutes at 1s interval
 
